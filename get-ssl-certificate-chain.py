@@ -113,6 +113,11 @@ if __name__ == "__main__":
             jsonData = jsonCerts
         elif args.unwrap and isinstance(jsonCerts, datetime.datetime):
             jsonData = jsonCerts.isoformat()
+        elif args.unwrap and isinstance(jsonCerts, dict):
+            jsonData = ""
+            for key in jsonCerts:
+                jsonData += key + "=" + jsonCerts[key] + ", "
+            if len(jsonData) > 0: jsonData = jsonData[0:-2]
         else:
             jsonData = json.dumps(jsonCerts, indent = 2, sort_keys = True, default = serializer)
         print jsonData
