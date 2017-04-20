@@ -76,7 +76,7 @@ if __name__ == "__main__":
     cli.add_argument("-p, --port", dest = "port", type = int, nargs = 1, default = 443)
     cli.add_argument("-s, --sni-name", dest = "sni_name", type = str, nargs = 1)
     cli.add_argument("--json-pointer", dest = "json_pointer", type = str, nargs = 1)
-    cli.add_argument("--json-path", dest = "json_path", type = str, nargs = 1)
+    cli.add_argument("--json-path", dest = "json_path", nargs = "+")
     args = cli.parse_args()
 
     opensslPath = proc.check_output("which openssl", shell = True).strip()
@@ -102,8 +102,9 @@ if __name__ == "__main__":
         for cert in certs:
             jsonCerts.append(certToDict(cert))
         if args.json_path != None and len(args.json_path) > 0:
-            expr = parse(args.json_path[0])
-            jsonCerts = [match.value for match in expr.find(jsonCerts)]
+            for pathExpression in args.json_path:
+                expr = parse(pathExpression)
+                jsonCerts = [match.value for match in expr.find(jsonCerts)]
         if args.json_pointer != None and len(args.json_pointer) > 0:
             pointer = args.json_pointer[0]
             jsonCerts = resolve_pointer(jsonCerts, pointer)
