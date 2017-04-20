@@ -110,4 +110,4 @@ if __name__ == "__main__":
         jsonData = json.dumps(jsonCerts, indent = 2, sort_keys = True, default = serializer)
         print jsonData
     else:
-        print "no output!"
+        print >> sys.stderr, "no output!"
