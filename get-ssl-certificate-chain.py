@@ -73,10 +73,11 @@ def serializer(obj):
 if __name__ == "__main__":
     cli = argparse.ArgumentParser(description = "Get and process SSL certificate chains.")
     cli.add_argument("--host", dest = "host", nargs = 1, type = str, required = True)
-    cli.add_argument("-p, --port", dest = "port", type = int, nargs = 1, default = 443)
-    cli.add_argument("-s, --sni-name", dest = "sni_name", type = str, nargs = 1)
+    cli.add_argument("-p", "--port", dest = "port", type = int, nargs = 1, default = 443)
+    cli.add_argument("-s", "--sni-name", dest = "sni_name", type = str, nargs = 1)
     cli.add_argument("--json-pointer", dest = "json_pointer", type = str, nargs = 1)
     cli.add_argument("--json-path", dest = "json_path", nargs = "+")
+    cli.add_argument("-u", "--unwrap", dest = "unwrap", action = "store_true")
     args = cli.parse_args()
 
     opensslPath = proc.check_output("which openssl", shell = True).strip()
@@ -108,7 +109,12 @@ if __name__ == "__main__":
         if args.json_pointer != None and len(args.json_pointer) > 0:
             pointer = args.json_pointer[0]
             jsonCerts = resolve_pointer(jsonCerts, pointer)
-        jsonData = json.dumps(jsonCerts, indent = 2, sort_keys = True, default = serializer)
+        if args.unwrap and isinstance(jsonCerts, str):
+            jsonData = jsonCerts
+        elif args.unwrap and isinstance(jsonCerts, datetime.datetime):
+            jsonData = jsonCerts.isoformat()
+        else:
+            jsonData = json.dumps(jsonCerts, indent = 2, sort_keys = True, default = serializer)
         print jsonData
     else:
         print >> sys.stderr, "no output!"
