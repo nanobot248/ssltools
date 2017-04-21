@@ -1,9 +1,14 @@
 # ssltools
 
-## INSTALLAION
+## Table of Contents
+* ** [INSTALLATION](#installation)**
+* ** [COMMANDS](#commands)**
+* ** [LINCENSE](#license)**
+
+## INSTALLATION
 The tools requires python "jsonpath" and "jsonpointer" packages (`python-jsonpath-rw` and `python-jsonpointer` in Debian/Ubuntu) and a working `openssl` command. The `openssl`command must be available in the PATH environment variable.
 
-*The following works in Ubuntu 16.04:*
+**The following works in Ubuntu 16.04:**
 ```
 $ sudo aptitude install python-jsonpath-rw python-json-pointer
 $ git clone https://github.com/nanobot248/ssltools.git
