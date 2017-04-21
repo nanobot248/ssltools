@@ -1,107 +1,63 @@
 #!/usr/bin/env python
 
-import subprocess as proc
 import sys
 import os
 import re
-from pprint import pprint
 import OpenSSL.crypto as crypto
 import json
-import base64
-import datetime
 from jsonpointer import resolve_pointer
 from jsonpath_rw import jsonpath, parse
 import argparse
+from datetime import datetime
 
-CERT_REGEX = re.compile('-----BEGIN CERTIFICATE-----[^-]*-----END CERTIFICATE-----')
-
-def readCerts(text):
-    m = re.search(CERT_REGEX, text)
-    certs = []
-    while m != None:
-        certs.append(m.group(0).strip())
-        text = text[m.end():-1]
-        m = re.search(CERT_REGEX, text)
-    return certs
-
-def certNameToDict(name):
-    result = {}
-    for (key,value) in name.get_components():
-        result[key] = value
-    return result
-
-def parseGeneralizedDatetime(ts):
-    result = None
-    if ts[-1] == "Z":
-        result = datetime.datetime.strptime(ts, "%Y%m%d%H%M%SZ")
-    elif ts[-5] == "+" or ts[-5] == "-":
-        result = datetime.datetime.strptime(ts, "%Y%m%d%H%M%S%z")
-    else:
-        result = datetime.datetime.strptime(ts, "%Y%m%d%H%M%S")
-    return result
-
-def certToDict(cert):
-    now = datetime.datetime.now()
-    result = {}
-    result["issuer"] = certNameToDict(cert.get_issuer())
-    result["subject"] = certNameToDict(cert.get_subject())
-    result["notBefore"] = parseGeneralizedDatetime(cert.get_notBefore())
-    result["notAfter"] = parseGeneralizedDatetime(cert.get_notAfter())
-    result["validSince"] = int((now - result["notBefore"]).total_seconds() / (24 * 3600))
-    result["validFor"] = int((result["notAfter"] - now).total_seconds() / (24 * 3600))
-    result["serial"] = cert.get_serial_number()
-    result["signatureAlgorithm"] = cert.get_signature_algorithm()
-    result["expired"] = cert.has_expired()
-    result["extensions"] = []
-    for i in xrange(0, cert.get_extension_count()):
-        value = {}
-        ext = cert.get_extension(i)
-        value["asString"] = ext.__str__()
-        value["criticalField"] = ext.get_critical()
-        value["shortName"] = ext.get_short_name()
-        data = ext.get_data();
-        value["data"] = base64.b64encode(data)
-        result["extensions"].append(value)
-    return result
-
-def serializer(obj):
-    if isinstance(obj, datetime.datetime):
-        return obj.isoformat()
-    else:
-        return obj.__str__()
+import ssltools.certificates as certificates
+from ssltools.openssl import call_openssl
+from ssltools.json import to_json
 
 if __name__ == "__main__":
     cli = argparse.ArgumentParser(description = "Get and process SSL certificate chains.")
-    cli.add_argument("--host", dest = "host", nargs = 1, type = str, required = True)
-    cli.add_argument("-p", "--port", dest = "port", type = int, nargs = 1, default = 443)
-    cli.add_argument("-s", "--sni-name", dest = "sni_name", type = str, nargs = 1)
-    cli.add_argument("--json-pointer", dest = "json_pointer", type = str, nargs = 1)
-    cli.add_argument("--json-path", dest = "json_path", nargs = "+")
-    cli.add_argument("-u", "--unwrap", dest = "unwrap", action = "store_true")
+    cli.add_argument("--host", dest = "host", nargs = 1, type = str, required = True,
+        help = "Hostname/IP to connect to.")
+    cli.add_argument("-p", "--port", dest = "port", type = int, nargs = 1, default = 443,
+        help = "Port to connect to (defaults to 443)")
+    cli.add_argument("-s", "--sni-name", dest = "sni_name", type = str, nargs = 1,
+        help = "SNI name to send to the server. Use this if the host supports multiple SSL certificates.")
+    cli.add_argument("--json-pointer", dest = "json_pointer", type = str, nargs = 1,
+        help = "JSON pointer query string (RFC6901) to get a specific attribute from the certificate data.")
+    cli.add_argument("--json-path", dest = "json_path", nargs = "+",
+        help = "JSON path (http://goessner.net/articles/JsonPath/) filter string " +
+        "to query a subset of the certificate data. Multiple queries can be specified that are executed in " +
+        "order on the result of the previous query.")
+    cli.add_argument("-u", "--unwrap", dest = "unwrap", action = "store_true",
+        help = "Unwrap transforms different data types into a simpler format. If a result is a simple string, " +
+        "or a datetime the quotes are removed. If the result is a X509 name, its parts are joined to a string " +
+        "in the way used by openssl (C=..., O=..., OU=..., CN=...)")
+    cli.add_argument("-r", "--raw", dest = "raw", action = "store_true",
+        help = "Just get the certificate chain in PEM format and print it to standard output.")
     args = cli.parse_args()
 
-    opensslPath = proc.check_output("which openssl", shell = True).strip()
-
-    opensslCommandLine = [opensslPath, "s_client", "-connect", "%s:%i" % (args.host[0], args.port[0]), "-prexit", "-showcerts"]
+    opensslCommandLine = ["s_client", "-connect", "%s:%i" % (args.host[0], args.port[0]), "-showcerts"]
     if args.sni_name != None and len(args.sni_name) > 0:
         opensslCommandLine.append("-servername")
         opensslCommandLine.append(args.sni_name[0])
-    openssl = proc.Popen(opensslCommandLine, stdin=proc.PIPE, stdout=proc.PIPE, stderr=proc.PIPE)
-    (out, err) = openssl.communicate("Q\n")
-
-    if openssl.returncode != 0:
+    openssl = call_openssl(opensslCommandLine, "Q\n")
+    if openssl['code'] != 0:
         print >> sys.stderr, "Error: Failure executing openssl command.\n"
-        print >> sys.stderr, err
+        print >> sys.stderr, openssl['err']
         sys.exit(1)
 
-    if out != None and out != "":
-        plainCerts = readCerts(out)
+    if openssl['out'] != None and openssl['out'] != "":
+        plainCerts = certificates.find_certificates(openssl['out'])
+        if args.raw:
+            for cert in plainCerts:
+                print cert
+            sys.exit(0)
         certs = []
         jsonCerts = []
         for cert in plainCerts:
             certs.append(crypto.load_certificate(crypto.FILETYPE_PEM, cert))
         for cert in certs:
-            jsonCerts.append(certToDict(cert))
+            jsonCerts.append(certificates.certificate_to_dict(cert))
         if args.json_path != None and len(args.json_path) > 0:
             for pathExpression in args.json_path:
                 expr = parse(pathExpression)
@@ -109,9 +65,10 @@ if __name__ == "__main__":
         if args.json_pointer != None and len(args.json_pointer) > 0:
             pointer = args.json_pointer[0]
             jsonCerts = resolve_pointer(jsonCerts, pointer)
+
         if args.unwrap and isinstance(jsonCerts, str):
             jsonData = jsonCerts
-        elif args.unwrap and isinstance(jsonCerts, datetime.datetime):
+        elif args.unwrap and isinstance(jsonCerts, datetime):
             jsonData = jsonCerts.isoformat()
         elif args.unwrap and isinstance(jsonCerts, dict):
             jsonData = ""
@@ -119,7 +76,8 @@ if __name__ == "__main__":
                 jsonData += key + "=" + jsonCerts[key] + ", "
             if len(jsonData) > 0: jsonData = jsonData[0:-2]
         else:
-            jsonData = json.dumps(jsonCerts, indent = 2, sort_keys = True, default = serializer)
+            jsonData = to_json(jsonCerts, pretty = True)
+
         print jsonData
     else:
         print >> sys.stderr, "no output!"
