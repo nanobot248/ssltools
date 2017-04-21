@@ -106,6 +106,8 @@ $ ./get-ssl-certificate-chain.py --host www.google.com -p 443 -s www.google.at -
 ```
 ### Verify Certificates
 Use `verify-certificates.py` to verify PEM-formatted certificates provided on standard input. The certificates are parsed and verified against the system-wide CA certificates (/etc/ssl/certs/ca-certificates.crt).
+Like `get-ssl.certificate-chain.py`, the command supports filtering via JSONPath and JSON pointer, as well as unwrapping. In standard mode, it will add a `verificationValid` property to each certificate that tells whether the certificate could be verified against the local CAs and the the other certificates in the chain.
+With `--only`, only `valid` or `invalid` certificates will be printed.
 
 ```
 usage: verify-certificates.py [-h] [--summary] [--only {valid,invalid}]
@@ -136,6 +138,78 @@ optional arguments:
                         its parts are joined to a string in the way used by
                         openssl (C=..., O=..., OU=..., CN=...). Unwrap has no
                         effect on a --summary value.
+```
+#### Examples
+Get all certificates of the server using `get-ssl-certificate-chain.py`, print them out as raw PEM (`-r` parameter) and verify them:
+```
+$ ./get-ssl-certificate-chain.py --host www.google.com -p 443 -s www.google.at --json-pointer "/0/subject" -r | ./verify-certificates.py 
+[
+  {
+    "expired": false, 
+    "extensions": [... removed for readability ...], 
+    "issuer": {
+      "C": "US", 
+      "CN": "GeoTrust Global CA", 
+      "O": "GeoTrust Inc."
+    }, 
+    "notAfter": "2017-12-31T23:59:59", 
+    "notBefore": "2015-04-01T00:00:00", 
+    "serial": 146066, 
+    "signatureAlgorithm": "sha256WithRSAEncryption", 
+    "subject": {
+      "C": "US", 
+      "CN": "Google Internet Authority G2", 
+      "O": "Google Inc"
+    }, 
+    "validFor": 254, 
+    "validSince": 751, 
+    "verificationValid": true
+  }, 
+  {
+    "expired": false, 
+    "extensions": [... removed for readability ...], 
+    "issuer": {
+      "C": "US", 
+      "O": "Equifax", 
+      "OU": "Equifax Secure Certificate Authority"
+    }, 
+    "notAfter": "2018-08-21T04:00:00", 
+    "notBefore": "2002-05-21T04:00:00", 
+    "serial": 1227750, 
+    "signatureAlgorithm": "sha1WithRSAEncryption", 
+    "subject": {
+      "C": "US", 
+      "CN": "GeoTrust Global CA", 
+      "O": "GeoTrust Inc."
+    }, 
+    "validFor": 486, 
+    "validSince": 5449, 
+    "verificationValid": true
+  }, 
+  {
+    "expired": false, 
+    "extensions": [... removed for readability ...], 
+    "issuer": {
+      "C": "US", 
+      "CN": "Google Internet Authority G2", 
+      "O": "Google Inc"
+    }, 
+    "notAfter": "2017-07-05T13:28:00", 
+    "notBefore": "2017-04-12T13:28:00", 
+    "serial": 8963580107717764213, 
+    "signatureAlgorithm": "sha256WithRSAEncryption", 
+    "subject": {
+      "C": "US", 
+      "CN": "*.google.at", 
+      "L": "Mountain View", 
+      "O": "Google Inc", 
+      "ST": "California"
+    }, 
+    "validFor": 74, 
+    "validSince": 9, 
+    "verificationValid": true
+  }
+]
 ```
 
 ## LICENSE
