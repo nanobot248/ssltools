@@ -12,7 +12,7 @@ This repository provides some tools for getting, verifying and processing SSL ce
 I wrote these scripts mostly for easier certificate expiry and CN monitoring with Zabbix. Therefore, it also provides "unwrapping" of certain data types (e.g. removing double quotes from output if the output is a JSON string)
 
 ## INSTALLATION
-The tools requires python "jsonpath" and "jsonpointer" packages (`python-jsonpath-rw` and `python-jsonpointer` in Debian/Ubuntu) and a working `openssl` command. The `openssl`command must be available in the PATH environment variable.
+The tools require python "jsonpath" and "jsonpointer" packages (`python-jsonpath-rw` and `python-jsonpointer` in Debian/Ubuntu) and a working `openssl` command. The `openssl`command must be available in the PATH environment variable.
 
 **The following works in Ubuntu 16.04:**
 ```
@@ -55,6 +55,55 @@ optional arguments:
                         it to standard output.
 ```
 
+#### Unwrapping
+Unwrapping of results works only for a single result that was filtered out via JSON pointer, e.g. by using `/0/subject`. Using JSONPath or no filtering at all, the result will always be an array and will not be unwrapped.
+
+Unwrapping currently does the following:
+* x509Name objects: The components of the name are joined in the format `comp1=value2, comp2=value2, ...`. This format is not invertible in all cases. It would be possible to create certificates with values like `O= , CN=bla, CN=test` (using `{"O": " ,CN=bla", "CN": "test"}` (i've successfully tried this with openssl). Although this is not a very realistic case, it may be relevant for security.
+* Strings: Strings will simply be printed without quotes.
+* datetime objects: The certificate ASN.1 generalized datetime is converted to python datetime.datetime objects. These datetime objects are then converted to ISO strings (`datetime.isoformat()`). Therefore, in the JSON representation, datetime objects are strings and using `-u` will simply remove the double quotes.
+
+#### Examples:
+Get all subjects for SNI name www.google.at from host www.google.com:
+```
+$ ./get-ssl-certificate-chain.py --host www.google.com -p 443 -s www.google.at --json-path "$.[*].['subject']"
+[
+  {
+    "C": "US", 
+    "CN": "*.google.at", 
+    "L": "Mountain View", 
+    "O": "Google Inc", 
+    "ST": "California"
+  }, 
+  {
+    "C": "US", 
+    "CN": "Google Internet Authority G2", 
+    "O": "Google Inc"
+  }, 
+  {
+    "C": "US", 
+    "CN": "GeoTrust Global CA", 
+    "O": "GeoTrust Inc."
+  }
+]
+```
+Get only the subject of the first certificate in the chain (should be the peer certificate) and unwrap it (which means the x509Name components are jointed into a single string and the string is not wrapped in double quotes):
+```
+$ ./get-ssl-certificate-chain.py --host www.google.com -p 443 -s www.google.at --json-pointer "/0/subject" -u
+CN=*.google.at, C=US, L=Mountain View, O=Google Inc, ST=California
+```
+
+The same without unwrapping:
+```
+$ ./get-ssl-certificate-chain.py --host www.google.com -p 443 -s www.google.at --json-pointer "/0/subject" 
+{
+  "C": "US", 
+  "CN": "*.google.at", 
+  "L": "Mountain View", 
+  "O": "Google Inc", 
+  "ST": "California"
+}
+```
 ### Verify Certificates
 Use `verify-certificates.py` to verify PEM-formatted certificates provided on standard input. The certificates are parsed and verified against the system-wide CA certificates (/etc/ssl/certs/ca-certificates.crt).
 
