@@ -1,9 +1,15 @@
 # ssltools
 
 ## Table of Contents
+* [Overview](#overview)
 * [INSTALLATION](#installation)
 * [COMMANDS](#commands)
 * [LICENSE](#license)
+
+## OVERVIEW
+This repository provides some tools for getting, verifying and processing SSL certificates. Certificates can be converted into a JSON representation and filtered with [jsonpath](http://goessner.net/articles/JsonPath/) and json pointer ([RFC6901](https://tools.ietf.org/html/rfc6901)).
+
+I wrote these scripts mostly for easier certificate expiry and CN monitoring with Zabbix. Therefore, it also provides "unwrapping" of certain data types (e.g. removing double quotes from output if the output is a JSON string)
 
 ## INSTALLATION
 The tools requires python "jsonpath" and "jsonpointer" packages (`python-jsonpath-rw` and `python-jsonpointer` in Debian/Ubuntu) and a working `openssl` command. The `openssl`command must be available in the PATH environment variable.
