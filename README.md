@@ -1,7 +1,7 @@
 # ssltools
 
 ## Table of Contents
-* [Overview](#overview)
+* [OVERVIEW](#overview)
 * [INSTALLATION](#installation)
 * [COMMANDS](#commands)
 * [LICENSE](#license)
